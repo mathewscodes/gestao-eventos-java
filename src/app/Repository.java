@@ -19,24 +19,17 @@ public class Repository {
         return eventos;
     }
 
-    public static void salvarUsuario(User usuario) {
-        usuarios.add(usuario);
-    }
-    public static List<User> listarUsuarios() {
-        return usuarios;
-    }
-
     public static void salvarEventosNoArquivo() {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter("events.data"))) {
+            DateTimeFormatter formato = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
             for (Event evento : eventos) {
-                DateTimeFormatter formato = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
                 writer.write(
-                evento.getNome() + ";" +
-                    evento.getEndereco() + ";" +
-                    evento.getHorario().format(formato) + ";" +
-                    evento.getCategoria() + ";" +
-                    evento.getFaixaEtaria() + ";" +
-                    evento.getDescricao()
+                        evento.getNome() + ";" +
+                                evento.getEndereco() + ";" +
+                                evento.getHorario().format(formato) + ";" +
+                                evento.getCategoria() + ";" +
+                                evento.getFaixaEtaria() + ";" +
+                                evento.getDescricao()
                 );
                 writer.newLine();
             }
@@ -54,7 +47,6 @@ public class Repository {
             while ((linha = reader.readLine()) != null) {
                 String[] partes = linha.split(";");
 
-                // cada posição corresponde ao que você gravou no arquivo
                 String nome = partes[0];
                 String endereco = partes[1];
                 LocalDateTime dataHora = LocalDateTime.parse(partes[2], formato);
@@ -62,7 +54,6 @@ public class Repository {
                 Classification faixaEtaria = Classification.valueOf(partes[4]);
                 String descricao = partes[5];
 
-                // cria o evento e adiciona na lista
                 Event evento = new Event();
                 evento.setNome(nome);
                 evento.setEndereco(endereco);
@@ -76,6 +67,14 @@ public class Repository {
         } catch (IOException e) {
             System.out.println("Erro ao carregar eventos: " + e.getMessage());
         }
+    }
+
+    public static void salvarUsuario(User usuario) {
+        usuarios.add(usuario);
+    }
+
+    public static List<User> listarUsuarios() {
+        return usuarios;
     }
 
     public static void salvarUsuariosNoArquivo() {
@@ -97,6 +96,7 @@ public class Repository {
     }
 
     public static void carregarUsuariosDoArquivo() {
+        usuarios.clear();
         DateTimeFormatter formato = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
         try (BufferedReader reader = new BufferedReader(new FileReader("users.data"))) {
@@ -104,14 +104,12 @@ public class Repository {
             while ((linha = reader.readLine()) != null) {
                 String[] partes = linha.split(";");
 
-                // cada posição corresponde ao que você gravou no arquivo
                 String nome = partes[0];
                 String email = partes[1];
                 String telefone = partes[2];
                 String cpf = partes[3];
                 LocalDate datanascimento = LocalDate.parse(partes[4], formato);
 
-                // cria o evento e adiciona na lista
                 User usuario = new User();
                 usuario.setNome(nome);
                 usuario.setEmail(email);
@@ -153,8 +151,54 @@ public class Repository {
         }
     }
 
-    public static List<String[]> carregarParticipacoesDoArquivo() {
+    public static void carregarParticipacoesDoArquivo() {
+        try (BufferedReader reader = new BufferedReader(new FileReader("participacoes.data"))) {
+            String linha;
+            while ((linha = reader.readLine()) != null) {
+                String[] partes = linha.split(";");
+                if (partes.length == 2) {
+                    String cpf = partes[0];
+                    String nomeEvento = partes[1];
+
+                    User usuario = buscarUsuarioPorCpf(cpf);
+                    Event evento = null;
+
+                    for (Event e : eventos) {
+                        if (e.getNome().equalsIgnoreCase(nomeEvento)) {
+                            evento = e;
+                            break;
+                        }
+                    }
+
+                    if (usuario != null && evento != null) {
+                        boolean jaExiste = evento.getParticipantes().stream()
+                                .anyMatch(u -> u.getCpf().equals(usuario.getCpf()));
+                        if (!jaExiste) {
+                            evento.getParticipantes().add(usuario);
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+
+        }
+    }
+
+    public static List<Event> listarEventosPorUsuario(String cpf) {
+        List<Event> eventosUsuario = new ArrayList<>();
+        for (Event e : eventos) {
+            for (User u : e.getParticipantes()) {
+                if (u.getCpf().equals(cpf)) {
+                    eventosUsuario.add(e);
+                }
+            }
+        }
+        return eventosUsuario;
+    }
+
+    public static void removerParticipacao(String cpf, Event evento) {
         List<String[]> participacoes = new ArrayList<>();
+
         try (BufferedReader reader = new BufferedReader(new FileReader("participacoes.data"))) {
             String linha;
             while ((linha = reader.readLine()) != null) {
@@ -164,33 +208,10 @@ public class Repository {
                 }
             }
         } catch (IOException e) {
+            System.out.println("Erro ao ler participações: " + e.getMessage());
         }
-        return participacoes;
-    }
 
-    public static List<Event> listarEventosPorUsuario(String cpf) {
-        List<Event> eventosUsuario = new ArrayList<>();
-        List<String[]> participacoes = carregarParticipacoesDoArquivo();
-
-        for (String[] p : participacoes) {
-            String cpfParticipante = p[0];
-            String nomeEvento = p[1];
-
-            if (cpfParticipante.equals(cpf)) {
-                for (Event e : eventos) {
-                    if (e.getNome().equals(nomeEvento)) {
-                        eventosUsuario.add(e);
-                    }
-                }
-            }
-        }
-        return eventosUsuario;
-    }
-
-    public static void removerParticipacao(String cpf, Event evento) {
-        List<String[]> participacoes = carregarParticipacoesDoArquivo();
         List<String[]> novasParticipacoes = new ArrayList<>();
-
         for (String[] p : participacoes) {
             String cpfParticipante = p[0];
             String nomeEvento = p[1];
@@ -208,5 +229,7 @@ public class Repository {
         } catch (IOException e) {
             System.out.println("Erro ao remover participação: " + e.getMessage());
         }
+
+        evento.getParticipantes().removeIf(u -> u.getCpf().equals(cpf));
     }
 }

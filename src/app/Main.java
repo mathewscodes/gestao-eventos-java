@@ -120,8 +120,11 @@ public class Main {
                         List<Event> meusEventos = new ArrayList<>();
 
                         for (Event e : listaEventos) {
-                            if (e.getParticipantes().contains(usuarioAtual)) {
-                                meusEventos.add(e);
+                            for (User u : e.getParticipantes()) {
+                                if (u.getCpf().equals(usuarioAtual.getCpf())) {
+                                    meusEventos.add(e);
+                                    break;
+                                }
                             }
                         }
 
